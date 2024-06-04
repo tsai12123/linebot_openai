@@ -16,7 +16,7 @@ handler = WebhookHandler(os.getenv('CHANNEL_SECRET'))
 
 # Gemini API Key初始化設定
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-
+GEMINI_API_URL = f'https://generativelanguage.googleapis.com/v1/models/gemini-vision-pro:generateContent?key={GEMINI_API_KEY}'
 def Gemini_response(text):
     headers = {
         'Content-Type': 'application/json',
@@ -25,13 +25,13 @@ def Gemini_response(text):
     data = {
         'message': text
     }
-    response = requests.post( headers=headers, json=data)
+    response = requests.post(GEMINI_API_URL, headers=headers, json=data)
     
     if response.status_code == 200:
         return response.json().get('response', 'Gemini AI無法回應')
     else:
         return f"Error: {response.status_code}, {response.text}"
-
+    
 # 監聽所有來自 /callback 的 Post Request
 @app.route("/callback", methods=['POST'])
 def callback():
