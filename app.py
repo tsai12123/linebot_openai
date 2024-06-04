@@ -1,38 +1,37 @@
 from flask import Flask, request, abort
-
-from linebot import (
-    LineBotApi, WebhookHandler
-)
-from linebot.exceptions import (
-    InvalidSignatureError
-)
+from linebot import LineBotApi, WebhookHandler
+from linebot.exceptions import InvalidSignatureError
 from linebot.models import *
-
-#======python的函數庫==========
-import tempfile, os
-import datetime
-import openai
-import time
+import os
+import requests
 import traceback
-#======python的函數庫==========
 
 app = Flask(__name__)
 static_tmp_path = os.path.join(os.path.dirname(__file__), 'static', 'tmp')
+
 # Channel Access Token
 line_bot_api = LineBotApi(os.getenv('CHANNEL_ACCESS_TOKEN'))
 # Channel Secret
 handler = WebhookHandler(os.getenv('CHANNEL_SECRET'))
-# OPENAI API Key初始化設定
-openai.api_key = os.getenv('OPENAI_API_KEY')
 
-def GPT_response(text):
-    # 接收回應
-    response = openai.Completion.create(model="gpt-3.5-turbo-instruct", prompt=text, temperature=0.5, max_tokens=500)
-    print(response)
-    # 重組回應
-    answer = response['choices'][0]['text'].replace('。','')
-    return answer
+# Gemini API Key初始化設定
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+GEMINI_API_URL = 'https://api.gemini.ai/v1/query'  # 假設的Gemini API URL
 
+def Gemini_response(text):
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {GEMINI_API_KEY}'
+    }
+    data = {
+        'message': text
+    }
+    response = requests.post(GEMINI_API_URL, headers=headers, json=data)
+    
+    if response.status_code == 200:
+        return response.json().get('response', 'Gemini AI無法回應')
+    else:
+        return f"Error: {response.status_code}, {response.text}"
 
 # 監聽所有來自 /callback 的 Post Request
 @app.route("/callback", methods=['POST'])
@@ -49,24 +48,21 @@ def callback():
         abort(400)
     return 'OK'
 
-
 # 處理訊息
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     msg = event.message.text
     try:
-        GPT_answer = GPT_response(msg)
-        print(GPT_answer)
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(GPT_answer))
+        gemini_answer = Gemini_response(msg)
+        print(gemini_answer)
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(gemini_answer))
     except:
         print(traceback.format_exc())
-        line_bot_api.reply_message(event.reply_token, TextSendMessage('你所使用的OPENAI API key額度可能已經超過，請於後台Log內確認錯誤訊息'))
-        
+        line_bot_api.reply_message(event.reply_token, TextSendMessage('你所使用的Gemini API key可能已經超過，請於後台Log內確認錯誤訊息'))
 
 @handler.add(PostbackEvent)
-def handle_message(event):
+def handle_postback(event):
     print(event.postback.data)
-
 
 @handler.add(MemberJoinedEvent)
 def welcome(event):
@@ -76,9 +72,7 @@ def welcome(event):
     name = profile.display_name
     message = TextSendMessage(text=f'{name}歡迎加入')
     line_bot_api.reply_message(event.reply_token, message)
-        
-        
-import os
+
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
